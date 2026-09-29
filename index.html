@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>5G-A 通感算一体：广域森林火险数字孪生大屏</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    
+    <script type="text/javascript" src="https://api.map.baidu.com/api?v=1.0&type=webgl&ak=zir4H0iW0ImWGtW3iv5PFo7sMRr3iQDh"></script>
+    
+    <style>
+        body { background: #0b101a; color: #fff; font-family: 'Segoe UI', Tahoma, sans-serif; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .header { text-align: center; margin-bottom: 25px; }
+        .header h1 { color: #00f2ff; margin: 0; letter-spacing: 2px; text-shadow: 0 0 15px rgba(0,242,255,0.6); }
+        .header p { color: #a0aec0; margin-top: 8px; font-size: 16px; letter-spacing: 1px;}
+        .main-container { display: flex; gap: 20px; width: 1300px; justify-content: center;}
+        .panel { background: rgba(16, 25, 43, 0.9); border: 1px solid #1e3a5f; border-radius: 8px; padding: 20px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); }
+        .panel-title { color: #e2e8f0; font-weight: bold; margin-bottom: 15px; border-left: 4px solid #00f2ff; padding-left: 10px; font-size: 16px; display: flex; justify-content: space-between; align-items: center;}
+        
+        .sidebar { width: 280px; display: flex; flex-direction: column; gap: 12px; }
+        .ctrl-group { background: #152336; padding: 12px; border-radius: 6px; border: 1px solid #23395d;}
+        label { font-size: 13px; color: #a0aec0; }
+        select { width: 100%; padding: 8px; margin-top: 5px; background: #0b101a; color: #fff; border: 1px solid #1e3a5f; border-radius: 4px; font-weight: bold; cursor: pointer; }
+        button { width: 100%; padding: 12px; margin-top: 5px; border-radius: 6px; border: none; font-size: 15px; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        
+        .btn-start { background: linear-gradient(135deg, #0052d4, #4364f7); color: white; box-shadow: 0 4px 15px rgba(67, 100, 247, 0.4); }
+        .btn-start:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(67, 100, 247, 0.6); }
+        .btn-predict { background: transparent; color: #ffd700; border: 1px solid #ffd700; margin-top: 0; }
+        .btn-predict.active { background: rgba(255, 215, 0, 0.2); box-shadow: 0 0 15px rgba(255, 215, 0, 0.5); }
+
+        .weather-card { background: rgba(0, 242, 255, 0.1); border: 1px dashed #00f2ff; padding: 10px; border-radius: 6px; }
+        .weather-text { color: #00f2ff; font-family: monospace; font-size: 14px; font-weight: bold;}
+
+        /* 地图容器样式 */
+        .map-area { flex: 1; display: flex; flex-direction: column; }
+        #bmap { width: 100%; height: 580px; border-radius: 8px; border: 2px solid #1e3a5f; box-shadow: inset 0 0 30px rgba(0,0,0,0.8); background: #050a10; }
+        
+        .chart-area { width: 340px; display: flex; flex-direction: column; gap: 15px; }
+        #riskChart { width: 100%; height: 200px; background: #152336; border-radius: 6px; border: 1px solid #23395d;}
+        .stat-card { text-align: center; background: #152336; padding: 12px; border-radius: 6px; border: 1px solid #23395d;}
+        .stat-val { font-size: 32px; font-weight: bold; color: #00f2ff; font-family: monospace; margin-top: 5px; text-shadow: 0 0 10px rgba(0, 242, 255, 0.4);}
+        .stat-val.safe { color: #00e676; text-shadow: 0 0 10px rgba(0, 230, 118, 0.4);}
+        .stat-val.warn { color: #ffd700; text-shadow: 0 0 10px rgba(255, 215, 0, 0.4);}
+        
+        /* 调度日志框 */
+        #dispatchLog { height: 100px; overflow-y: auto; background: #050a10; padding: 10px; font-size: 12px; color: #00e676; font-family: monospace; border: 1px solid #1e3a5f; border-radius: 6px;}
+        .log-entry { margin-bottom: 5px; border-bottom: 1px solid #152336; padding-bottom: 3px; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>🛰️ 5G-A 通感算一体：广域森林火险数字孪生大屏</h1>
+        <p>天地一体化 WebGIS · 实体消防增援调度 · 边缘智算集群</p>
+    </div>
+
+    <div class="main-container">
+        <div class="sidebar panel">
+            <div class="panel-title">MEC 边缘云调度策略</div>
+            <div class="ctrl-group">
+                <label>气象风向设定</label>
+                <select id="windDir">
+                    <option value="North">北风 (火势向南蔓延)</option>
+                    <option value="South">南风 (火势向北蔓延)</option>
+                    <option value="East">东风 (火势向西蔓延)</option>
+                    <option value="West">西风 (火势向东蔓延)</option>
+                </select>
+            </div>
+            <div class="ctrl-group">
+                <label>🟢 空中通感侦查编队</label>
+                <select id="scoutCount">
+                    <option value="2">2 架 (极容易漏报)</option>
+                    <option value="5" selected>5 架 (标准网格巡逻)</option>
+                    <option value="12">12 架 (密集扫描)</option>
+                </select>
+            </div>
+            <div class="ctrl-group">
+                <label>🔵 空中突击灭火编队</label>
+                <select id="rescueCount">
+                    <option value="4">4 架 (轻量级救援)</option>
+                    <option value="8" selected>8 架 (中级扑救编队)</option>
+                    <option value="15">15 架 (饱和式灭火)</option>
+                </select>
+            </div>
+            <button class="btn-start" onclick="startSimulation()">🚀 唤醒 5G-A 智算调度</button>
+            <button class="btn-predict" id="predictBtn" onclick="togglePrediction()">🔮 开启 AI 预测推演</button>
+            <div class="weather-card">
+                <div style="color: #a0aec0; font-size: 12px; margin-bottom: 5px;">📍 Kaggle 历史气象特征：</div>
+                <div class="weather-text">气温: <span id="envTemp">--</span>℃ | 湿度: <span id="envHumidity">--</span>%</div>
+            </div>
+        </div>
+
+        <div class="map-area panel">
+            <div class="panel-title">
+                通感一体：真实地理 LBS 态势感知大屏
+                <div style="font-size: 12px; font-weight: normal; color: #a0aec0;">📍 投影：四川省西昌市林区</div>
+            </div>
+            <div id="bmap"></div>
+        </div>
+
+        <div class="chart-area panel">
+            <div class="panel-title">LBS 协同调度遥测中心</div>
+            <div class="stat-card">
+                <div style="color: #a0aec0; font-size: 14px;">当前实时火险指数 (Risk Score)</div>
+                <div class="stat-val" style="color: #ff4500;" id="riskVal">0</div>
+            </div>
+            
+            <div id="riskChart"></div>
+            
+            <div class="panel-title" style="margin-bottom: 5px; margin-top: 10px;">地面实体消防增援日志</div>
+            <div id="dispatchLog">
+                <div class="log-entry" style="color: #a0aec0;">[系统] 等待侦查机通感数据接入...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 初始化地图与设置深色主题
+        const map = new BMapGL.Map("bmap");
+        const mapCenter = new BMapGL.Point(102.2600, 27.8800); 
+        map.centerAndZoom(mapCenter, 14);
+        map.enableScrollWheelZoom(true);
+        map.setMapStyleV2({styleId: 'midnight'});
+
+        // 坐标系映射 (虚拟网格 -> 真实经纬度)
+        const GRID_SIZE = 30;
+        const START_LNG = 102.2450; 
+        const START_LAT = 27.8950;
+        const LNG_STEP = 0.001; 
+        const LAT_STEP = 0.001; 
+
+        function gridToCoord(x, y) {
+            return new BMapGL.Point(START_LNG + x * LNG_STEP, START_LAT - y * LAT_STEP);
+        }
+
+        // 部署消防站
+        const fireStations = [
+            { name: "西昌市北部特勤消防站", point: new BMapGL.Point(102.2400, 27.9000), color: "#0052d4" },
+            { name: "大凉山森林武警第一大队", point: new BMapGL.Point(102.2900, 27.8750), color: "#4364f7" },
+            { name: "南方直升机救援基地", point: new BMapGL.Point(102.2550, 27.8600), color: "#6fb1fc" }
+        ];
+
+        fireStations.forEach(station => {
+            const circle = new BMapGL.Circle(station.point, 150, { strokeColor: station.color, strokeWeight: 2, fillColor: station.color, fillOpacity: 0.6 });
+            map.addOverlay(circle);
+            const label = new BMapGL.Label("🛡️ " + station.name, { position: station.point, offset: new BMapGL.Size(10, -10) });
+            label.setStyle({ color: '#fff', background: 'rgba(0,0,0,0.6)', border: '1px solid #1e3a5f', padding: '2px 5px', borderRadius: '4px' });
+            map.addOverlay(label);
+        });
+
+        // 状态管理
+        let simState = null;
+        let isPredicting = false;
+        let overlayCache = { fires: {}, scouts: [], rescues: [], predictions: [], dispatchLines: [] };
+        let calledStations = new Set(); 
+
+        // ECharts 初始化
+        const riskChart = echarts.init(document.getElementById('riskChart'), 'dark');
+        let riskData = []; let timeLabels = []; let tick = 0;
+        riskChart.setOption({
+            backgroundColor: 'transparent', tooltip: { trigger: 'axis' },
+            grid: { top: 10, bottom: 20, left: 40, right: 10 },
+            xAxis: { type: 'category', data: timeLabels, splitLine: {show: false} },
+            yAxis: { type: 'value', splitLine: { lineStyle: { color: '#1e3a5f' } } },
+            series: [{ data: riskData, type: 'line', smooth: true, lineStyle: { color: '#ff4500', width: 3 }, symbol: 'none' }]
+        });
+
+        async function fetchState() {
+            try {
+                const res = await fetch('http://127.0.0.1:8000/api/state');
+                simState = await res.json();
+                updateUI();
+                renderMapOverlays();
+            } catch (e) {}
+        }
+
+        async function fetchPrediction() {
+            if (!isPredicting || !simState || simState.status !== "running") return;
+            try {
+                const res = await fetch('http://127.0.0.1:8000/api/predict');
+                const data = await res.json();
+                renderPredictionOverlays(data.predicted_spread);
+            } catch (e) {}
+        }
+
+        function togglePrediction() {
+            isPredicting = !isPredicting;
+            const btn = document.getElementById('predictBtn');
+            if (isPredicting) {
+                btn.classList.add('active'); btn.innerText = "⚠️ AI 预测推演中...";
+            } else {
+                btn.classList.remove('active'); btn.innerText = "🔮 开启 AI 预测推演";
+                overlayCache.predictions.forEach(p => map.removeOverlay(p));
+                overlayCache.predictions = [];
+            }
+        }
+
+        function startSimulation() {
+            const wind = document.getElementById('windDir').value;
+            const scoutCount = parseInt(document.getElementById('scoutCount').value);
+            const rescueCount = parseInt(document.getElementById('rescueCount').value);
+            
+            map.clearOverlays();
+            fireStations.forEach(s => {
+                map.addOverlay(new BMapGL.Circle(s.point, 150, { strokeColor: s.color, strokeWeight: 2, fillColor: s.color, fillOpacity: 0.6 }));
+                const label = new BMapGL.Label("🛡️ " + s.name, { position: s.point, offset: new BMapGL.Size(10, -10) });
+                label.setStyle({ color: '#fff', background: 'rgba(0,0,0,0.6)', border: '1px solid #1e3a5f', padding: '2px 5px' });
+                map.addOverlay(label);
+            });
+            overlayCache = { fires: {}, scouts: [], rescues: [], predictions: [], dispatchLines: [] };
+            document.getElementById('dispatchLog').innerHTML = '';
+            calledStations = new Set(); 
+
+            fetch('http://127.0.0.1:8000/api/start', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ wind: wind, scout_count: scoutCount, rescue_count: rescueCount })
+            }).then(() => {
+                riskData = []; timeLabels = []; tick = 0; 
+            });
+        }
+
+        function updateUI() {
+            if (!simState || simState.status === "idle") return;
+            document.getElementById('riskVal').innerText = simState.risk_score;
+            document.getElementById('envTemp').innerText = simState.env_temp;
+            document.getElementById('envHumidity').innerText = simState.env_humidity;
+            
+            tick++; riskData.push(simState.risk_score); timeLabels.push(tick);
+            if(riskData.length > 50) { riskData.shift(); timeLabels.shift(); }
+            riskChart.setOption({ xAxis: { data: timeLabels }, series: [{ data: riskData }] });
+        }
+
+        function renderMapOverlays() {
+            if (!simState || simState.status === "idle") return;
+
+            // 火源渲染
+            for(let y=0; y<GRID_SIZE; y++) {
+                for(let x=0; x<GRID_SIZE; x++) {
+                    const val = simState.grid[y][x];
+                    const key = x + '_' + y;
+                    
+                    if (val === 0 && overlayCache.fires[key]) {
+                        map.removeOverlay(overlayCache.fires[key]);
+                        delete overlayCache.fires[key];
+                    } else if (val > 0) {
+                        const pt = gridToCoord(x, y);
+                        let color, opacity, radius;
+                        if (val === 1) { color = '#cc5500'; opacity = 0.5; radius = 40; } 
+                        else if (val === 3) { color = '#ff0000'; opacity = 0.8; radius = 60; } 
+                        else if (val === 2) { color = '#333333'; opacity = 0.4; radius = 40; } 
+
+                        if (!overlayCache.fires[key]) {
+                            const circle = new BMapGL.Circle(pt, radius, {strokeColor: color, strokeWeight: 1, fillColor: color, fillOpacity: opacity});
+                            map.addOverlay(circle);
+                            overlayCache.fires[key] = circle;
+                        } else {
+                            overlayCache.fires[key].setFillColor(color);
+                            overlayCache.fires[key].setStrokeColor(color);
+                            overlayCache.fires[key].setRadius(radius);
+                        }
+
+                        // LBS 自动调度
+                        if (val === 3) { triggerGroundDispatch(pt); }
+                    }
+                }
+            }
+
+            // 侦查机渲染
+            while(overlayCache.scouts.length < simState.scouts.length) {
+                let m = new BMapGL.Marker(gridToCoord(0,0), { icon: new BMapGL.Symbol(BMap_Symbol_SHAPE_CIRCLE, {scale: 4, fillColor: "#00ff00", fillOpacity: 1, strokeColor:"#fff", strokeWeight:1}) });
+                map.addOverlay(m);
+                overlayCache.scouts.push(m);
+            }
+            simState.scouts.forEach((s, i) => { overlayCache.scouts[i].setPosition(gridToCoord(s.x, s.y)); });
+
+            // 救援机渲染
+            while(overlayCache.rescues.length < simState.rescues.length) {
+                let m = new BMapGL.Marker(gridToCoord(0,0), { icon: new BMapGL.Symbol(BMap_Symbol_SHAPE_PLANE, {scale: 1.5, fillColor: "#00f2ff", fillOpacity: 1, strokeColor:"#fff", strokeWeight:1}) });
+                map.addOverlay(m);
+                overlayCache.rescues.push(m);
+            }
+            simState.rescues.forEach((r, i) => { overlayCache.rescues[i].setPosition(gridToCoord(r.x, r.y)); });
+        }
+
+        function renderPredictionOverlays(coords) {
+            overlayCache.predictions.forEach(p => map.removeOverlay(p));
+            overlayCache.predictions = [];
+            coords.forEach(p => {
+                const pt = gridToCoord(p.x, p.y);
+                const rect = new BMapGL.Circle(pt, 50, {strokeColor: "#ffd700", strokeWeight: 1, fillColor: "#ffd700", fillOpacity: 0.3});
+                map.addOverlay(rect);
+                overlayCache.predictions.push(rect);
+            });
+        }
+
+        function triggerGroundDispatch(firePoint) {
+            let nearestStation = null;
+            let minDist = 9999999;
+
+            fireStations.forEach(station => {
+                let dist = map.getDistance(station.point, firePoint);
+                if (dist < minDist) { minDist = dist; nearestStation = station; }
+            });
+
+            if (nearestStation && !calledStations.has(nearestStation.name)) {
+                calledStations.add(nearestStation.name); 
+                
+                const polyline = new BMapGL.Polyline([nearestStation.point, firePoint], {strokeColor: "#ff0000", strokeWeight: 3, strokeOpacity: 0.8, strokeStyle: "dashed"});
+                map.addOverlay(polyline);
+                
+                const logDiv = document.getElementById('dispatchLog');
+                const time = new Date().toLocaleTimeString();
+                const distKm = (minDist / 1000).toFixed(2);
+                const etaMin = Math.round((minDist / 1000) / 60 * 60); 
+                
+                logDiv.innerHTML = `
+                    <div class="log-entry">
+                        <span style="color:#ffd700">[${time} 警报]</span> 锁定明火坐标！<br>
+                        👉 LBS计算就近节点: <b>${nearestStation.name}</b><br>
+                        👉 调度实体编队出发，直线距离 ${distKm}km，ETA: <b>${etaMin} 分钟</b>
+                    </div>
+                ` + logDiv.innerHTML;
+            }
+        }
+
+        setInterval(fetchState, 150); 
+        setInterval(fetchPrediction, 800); 
+    </script>
+</body>
+</html>
